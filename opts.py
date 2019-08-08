@@ -13,11 +13,11 @@ def parse_opt():
 
     parser.add_argument('--max_seq_len', type=int, default=200,
                     help='max_seq_len')
-    parser.add_argument('--batch_size', type=int, default=1,
+    parser.add_argument('--batch_size', type=int, default=32,
                     help='batch_size')
-    parser.add_argument('--embedding_dim', type=int, default=100,
+    parser.add_argument('--embedding_dim', type=int, default=300,
                     help='embedding_dim')
-    parser.add_argument('--learning_rate', type=float, default=2e-5,
+    parser.add_argument('--learning_rate', type=float, default=2e-4,
                     help='learning_rate')
     parser.add_argument('--grad_clip', type=float, default=1e-1,
                     help='grad_clip')
@@ -31,7 +31,7 @@ def parse_opt():
     parser.add_argument('--position', type=bool, default=False,
                     help='gpu number')
     
-    parser.add_argument('--keep_dropout', type=float, default=0.8,
+    parser.add_argument('--keep_dropout', type=float, default=0.3,
                     help='keep_dropout')
     parser.add_argument('--max_epoch', type=int, default=20,
                     help='max_epoch')
@@ -40,9 +40,9 @@ def parse_opt():
     parser.add_argument('--embedding_training', type=str, default="false",
                     help='embedding_training')
     #kim CNN
-    parser.add_argument('--kernel_sizes', type=str, default="1,2,3,5",
+    parser.add_argument('--kernel_sizes', type=str, default="2,3,4",
                     help='kernel_sizes')
-    parser.add_argument('--kernel_nums', type=str, default="256,256,256,256",
+    parser.add_argument('--kernel_nums', type=str, default="128,128,128",
                     help='kernel_nums')
     parser.add_argument('--embedding_type', type=str, default="non-static",
                     help='embedding_type')
@@ -66,6 +66,12 @@ def parse_opt():
     parser.add_argument('--from_torchtext', type=str, default="false",
                     help='from torchtext or native data loader')
 #
+    parser.add_argument('--shuffle', type=str, default="sequential",
+                    help='random shuffle or sequential shuffle')
+
+    parser.add_argument('--datas', type=str, default="first",
+                    help='which round for loading data')
+
     args = parser.parse_args()
     
     if args.config != "no_file_exists":
@@ -105,7 +111,9 @@ def parse_opt():
         args.from_torchtext = True
     else:
         args.from_torchtext = False
-        
+    
+    # if args.dataset == 'imdb':
+    #     args.max_seq_len = 100
         
     if os.path.exists("proxy.config"):
         with open("proxy.config") as f:
