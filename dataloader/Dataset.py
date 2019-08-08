@@ -25,21 +25,21 @@ class Dataset(object):
         self.http_proxy= opt.__dict__.get("proxy","null")
         
         
-    def process(self):
+    def process(self,opt):
         dirname=self.download()
         print("processing dirname: "+ dirname)
-        raise Exception("method in father class have been called in processing: {} dataset".format(opt.dataset))
+        # raise Exception("method in father class have been called in processing: {} dataset".format(opt.dataset))
         return dirname
     
     
-    def getFormatedData(self):
+    def getFormatedData(self, opt):
         
         if self.formated_files is not None:
             return self.formated_files
         
         if os.path.exists(self.saved_path):
             return [os.path.join(self.saved_path,filename) for filename in os.listdir(self.saved_path)]
-        self.formated_files = self.process()
+        self.formated_files = self.process(opt)
         return self.formated_files
     
     def download_from_url(self,url, path, schedule=None):

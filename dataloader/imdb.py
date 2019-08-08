@@ -24,17 +24,37 @@ class IMDBDataset(Dataset):
         for data_folder in  ("train","test"):
             data = []  
             for polarity in ("pos","neg"):
+                records = []
                 diranme=os.path.join( os.path.join(root,data_folder), polarity)
                 for rt, dirs, files in os.walk(diranme):
                     for f in files:
                         filename= os.path.join(rt,f)
-                        data.append( {"text": open(filename,encoding="utf-8").read().strip(),"label":int(polarity=="pos")})
-            df=pd.DataFrame(data)
-            saved_filename=os.path.join(self.saved_path,data_folder+".csv")
-            
-            df[["text","label"]].to_csv(saved_filename,index=False,header=None,sep="\t",encoding="utf-8")
-            print("finished %s"%saved_filename)
-            datafiles.append(saved_filename)
+                        data.append({"text": open(filename,encoding="utf-8").read().strip(),"label":int(polarity=="pos")})
+                        # records.append( {"text": open(filename,encoding="utf-8").read().strip(),"label":int(polarity=="pos")})
+                # data.append(pd.DataFrame(records))
+            df = pd.DataFrame(data)
+            # df=pd.concat(data)
+            if data_folder == "train":
+                saved_filename=os.path.join(self.saved_path,data_folder+".csv")
+                from sklearn.utils import shuffle
+                df = shuffle(df,random_state=0)
+                len_of_df = len(df)
+                df.iloc[:int(len_of_df*5/6)].to_csv(saved_filename,index=False,header=None,sep="\t",encoding="utf-8")  
+                print("finished %s"%saved_filename)
+                datafiles.append(saved_filename)
+
+                saved_filename=os.path.join(self.saved_path,"dev.csv")
+                df.iloc[int(len_of_df*5/6):].to_csv(saved_filename,index=False,header=None,sep="\t",encoding="utf-8")
+                print("finished %s"%saved_filename)
+                datafiles.append(saved_filename)
+            else:
+                saved_filename=os.path.join(self.saved_path,data_folder+".csv")
+                from sklearn.utils import shuffle
+                df = shuffle(df,random_state=0)
+                len_of_df = len(df)
+                df.to_csv(saved_filename,index=False,header=None,sep="\t",encoding="utf-8")
+                print("finished %s"%saved_filename)
+                datafiles.append(saved_filename)
         print("processing into formated files over")
         
         
