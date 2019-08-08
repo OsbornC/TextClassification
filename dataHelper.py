@@ -36,6 +36,7 @@ class Alphabet(dict):
             self[item] = idx
       # self[idx] = item
             self.fid += 1
+            # idx = self.get('[UNK]')
         return idx
     
     def addAll(self,words):
@@ -61,7 +62,7 @@ class DottableDict(dict):
             self.__dict__ = dict()
             
 class BucketIterator(object):
-    def __init__(self,data,opt=None,batch_size=2,shuffle=True,test=False,position=False):
+    def __init__(self,data,opt=None,batch_size=32,shuffle=False,test=False,position=False,sort=False,sort_within_batch=False):
         self.shuffle=shuffle
         self.data=data
         self.batch_size=batch_size
@@ -105,7 +106,52 @@ class BucketIterator(object):
             yield self.transform(self.data[i*self.batch_size:(i+1)*self.batch_size])
         yield self.transform(self.data[-1*self.batch_size:])
     
+class Iterator(object):
+    def __init__(self,data,opt=None,batch_size=32,shuffle=False,test=False,position=False,sort=False,sort_within_batch=False):
+        self.shuffle=shuffle
+        self.data=data
+        self.batch_size=batch_size
+        self.test=test        
+        if opt is not None:
+            self.setup(opt)
+    def setup(self,opt):
+        
+        self.batch_size=opt.batch_size
+        self.shuffle=opt.__dict__.get("shuffle",self.shuffle)
+        self.position=opt.__dict__.get("position",False)
+        if self.position:
+            self.padding_token =  opt.alphabet.padding_token
+    
+    def transform(self,data):
+        if torch.cuda.is_available():
+            data=data.reset_index()
+            text= Variable(torch.LongTensor(data.text).cuda())
+            label= Variable(torch.LongTensor([int(i) for i in data.label.tolist()]).cuda())                
+        else:
+            data=data.reset_index()
+            text= Variable(torch.LongTensor(data.text))
+            label= Variable(torch.LongTensor(data.label.tolist()))
+        if self.position:
+            position_tensor = self.get_position(data.text)
+            return DottableDict({"text":(text,position_tensor),"label":label})
+        return DottableDict({"text":text,"label":label})
+    
+    def get_position(self,inst_data):
+        inst_position = np.array([[pos_i+1 if w_i != self.padding_token else 0 for pos_i, w_i in enumerate(inst)] for inst in inst_data])
+        inst_position_tensor = Variable( torch.LongTensor(inst_position), volatile=self.test) 
+        if torch.cuda.is_available():
+            inst_position_tensor=inst_position_tensor.cuda()
+        return inst_position_tensor
 
+    def __iter__(self):
+        batch_nums = int(len(self.data)/self.batch_size)
+        data_idx_list = list(range(0, len(self.data)))
+        for  i in range(batch_nums):
+            random_idx = random.sample(data_idx_list, self.batch_size)
+            # yield self.transform([self.data[['text', 'label']].iloc[i] for i in random_idx])
+            yield self.transform(self.data.loc[random_idx, ['text', 'label']])
+        yield self.transform(self.data[-1*self.batch_size:])
+    
         
                 
 @log_time_delta
@@ -146,7 +192,7 @@ def getEmbeddingFile(opt):
     #"glove"  "w2v"
     embedding_name = opt.__dict__.get("embedding","glove_6b_300")
     if embedding_name.startswith("glove"):
-        return os.path.join( ".vector_cache","glove.6B.300d.txt")
+        return os.path.join( "vector_cache","glove.6B.300d.txt")
     else:
         return opt.embedding_dir
     # please refer to   https://pypi.python.org/pypi/torchwordemb/0.0.7
@@ -178,7 +224,8 @@ def getDataSet(opt):
     dataset= dataloader.getDataset(opt)
 #    files=[os.path.join(data_dir,data_name)   for data_name in ['train.txt','test.txt','dev.txt']]
     
-    return dataset.getFormatedData()
+    # return dataset.getFormatedData(opt)
+    return dataset.process()
     
     #data_dir = os.path.join(".data/clean",opt.dataset)
     #if not os.path.exists(data_dir):
@@ -209,6 +256,7 @@ def get_clean_datas(opt):
     if not os.path.exists(pickle_filename) or opt.debug: 
         datas = [] 
         for filename in getDataSet(opt):
+            print('filename', filename)
             df = pd.read_csv(filename,header = None,sep="\t",names=["text","label"]).fillna('0')
     
         #        df["text"]= df["text"].apply(clean).str.lower().str.split() #replace("[\",:#]"," ")
@@ -245,56 +293,62 @@ def load_vocab_from_bert(bert_base):
 def process_with_bert(text,tokenizer,max_seq_len) :
     tokens =tokenizer.convert_tokens_to_ids(  tokenizer.tokenize(" ".join(text[:max_seq_len])))
     
-    return tokens + [0] *int(max_seq_len-len(tokens))
+    return tokens[:max_seq_len] + [0] *int(max_seq_len-len(tokens))
 
 def loadData(opt,embedding=True):
-    if embedding==False:
-        return loadDataWithoutEmbedding(opt)
-    
-    datas =get_clean_datas(opt)
-    
-    alphabet = Alphabet(start_feature_id = 0)
-    label_alphabet= Alphabet(start_feature_id = 0,alphabet_type="label") 
-    
-    df=pd.concat(datas)   
-    df.to_csv("demo.text",sep="\t",index=False)
-    label_set = set(df["label"])
-    label_alphabet.addAll(label_set)
-    opt.label_size= len(label_alphabet)
-    if opt.max_seq_len==-1:
-        opt.max_seq_len = df.apply(lambda row: row["text"].__len__(),axis=1).max()
+    if opt.datas == 'first':
+        if embedding==False:
+            return loadDataWithoutEmbedding(opt)
         
-    if "bert" not in opt.model.lower(): 
+        datas =get_clean_datas(opt)
+        
+        alphabet = Alphabet(start_feature_id = 0)
+        label_alphabet= Alphabet(start_feature_id = 0,alphabet_type="label") 
+        
+        df=pd.concat(datas)   
+        df.to_csv("demo.text",sep="\t",index=False)
+        label_set = set(df["label"])
+        label_alphabet.addAll(label_set)
+        opt.label_size= len(label_alphabet)
+        if opt.max_seq_len==-1:
+            opt.max_seq_len = df.apply(lambda row: row["text"].__len__(),axis=1).max()
+        if opt.dataset == 'imdb':
+            opt.max_seq_len = 100
+        if "bert" not in opt.model.lower(): 
 
+            
+            word_set=set()
+            [word_set.add(word)  for l in df["text"] if l is not None for word in l ]
+        #    from functools import reduce
+        #    word_set=set(reduce(lambda x,y :x+y,df["text"]))            
+           
+            alphabet.addAll(word_set)
+
+            vectors = getSubVectors(opt,alphabet) 
+            
+            opt.vocab_size= len(alphabet)    
+        #    opt.label_size= len(label_alphabet)
+            # opt.embedding_dim= vectors.shape[-1]      #important!!!!!!!!
+            opt.embeddings = torch.FloatTensor(vectors)
+            
+        else:   
+            alphabet,tokenizer = load_vocab_from_bert(opt.bert_dir)
         
-        word_set=set()
-        [word_set.add(word)  for l in df["text"] if l is not None for word in l ]
-    #    from functools import reduce
-    #    word_set=set(reduce(lambda x,y :x+y,df["text"]))            
-       
-        alphabet.addAll(word_set)
+        opt.alphabet=alphabet
     
-        vectors = getSubVectors(opt,alphabet) 
-        
-        opt.vocab_size= len(alphabet)    
-    #    opt.label_size= len(label_alphabet)
-        opt.embedding_dim= vectors.shape[-1]
-        opt.embeddings = torch.FloatTensor(vectors)
-        
-    else:   
-        alphabet,tokenizer = load_vocab_from_bert(opt.bert_dir)
     
-    opt.alphabet=alphabet
-    
-#    alphabet.dump(opt.dataset+".alphabet")     
-    for data in datas:
-        if "bert" not in opt.model.lower():
-            data["text"]= data["text"].apply(lambda text: [alphabet.get(word,alphabet.unknow_token)  for word in text[:opt.max_seq_len]] + [alphabet.padding_token] *int(opt.max_seq_len-len(text)) )
-        else :
-            data["text"]= data["text"].apply(process_with_bert,tokenizer=tokenizer,max_seq_len = opt.max_seq_len)
-        data["label"]=data["label"].apply(lambda text: label_alphabet.get(text)) 
-        
-    return map(lambda x:BucketIterator(x,opt),datas)#map(BucketIterator,datas)  #
+    #    alphabet.dump(opt.dataset+".alphabet")     
+        for data in datas:
+            if "bert" not in opt.model.lower():
+                data["text"]= data["text"].apply(lambda text: [alphabet.get(word,alphabet.unknow_token)  for word in text[:opt.max_seq_len]] + [alphabet.padding_token] *int(opt.max_seq_len-len(text)) )
+            else :
+                data["text"]= data["text"].apply(process_with_bert,tokenizer=tokenizer,max_seq_len = opt.max_seq_len)
+            data["label"]=data["label"].apply(lambda text: label_alphabet.get(text))
+        opt.datas = datas
+    if opt.shuffle == 'sequential':    
+        return map(lambda x:BucketIterator(x,opt),opt.datas)#map(BucketIterator,datas)  #
+    else:
+        return map(lambda x:Iterator(x,opt),opt.datas)
 
 def loadDataWithoutEmbedding(opt):
     datas=[]
