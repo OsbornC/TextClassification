@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import torch as t
 import numpy as np
 from torch import nn
@@ -8,6 +7,11 @@ class BasicCNN1D(nn.Module):
         super(BasicCNN1D, self).__init__()
         self.model_name = 'CNNText'
         self.opt=opt
+        # if opt.dataset=="imdb":
+        #     self.content_dim=opt.__dict__.get("content_dim",128)
+        #     self.kernel_size=opt.__dict__.get("kernel_size",3)
+        #     opt.embedding_dim = 100
+        # else:
         self.content_dim=opt.__dict__.get("content_dim",256)
         self.kernel_size=opt.__dict__.get("kernel_size",3)
 
@@ -16,8 +20,10 @@ class BasicCNN1D(nn.Module):
         if opt.__dict__.get("embeddings",None) is not None:
             self.encoder.weight=nn.Parameter(opt.embeddings,requires_grad=opt.embedding_training)
 
+        self.dropout = nn.Dropout(0.3)
+
         self.content_conv = nn.Sequential(
-            nn.Conv1d(in_channels = opt.embedding_dim,
+            nn.Conv1d(in_channels = opt.embedding_dim, #300
                       out_channels = self.content_dim, #256
                       kernel_size = self.kernel_size), #3
             nn.ReLU(),
@@ -28,10 +34,11 @@ class BasicCNN1D(nn.Module):
 
     def forward(self,  content):
 
-        content = self.encoder(content) #64x200x300
-        content_out = self.content_conv(content.permute(0,2,1)) #64x256x1
+        content = self.encoder(content) #64x200x300 32x100x300
+        content_out = self.dropout(self.content_conv(content.permute(0,2,1))) #64x256x1 32x300x100
         reshaped = content_out.view(content_out.size(0), -1) #64x256
         logits = self.fc(reshaped) #64x3
+
         return logits
 class BasicCNN2D(nn.Module):
     """
@@ -55,7 +62,7 @@ class BasicCNN2D(nn.Module):
         if opt.__dict__.get("embeddings",None) is not None:
             self.embed.weight=nn.Parameter(opt.embeddings)
             
-        self.conv = nn.ModuleList([nn.Conv2d(in_channel, out_channel, (K, self.embedding_dim)) for K,out_channel in zip(self.kernel_sizes,self.kernel_nums)])
+        self.conv = nn.Conv2d(in_channel, self.kernel_nums, (self.kernel_sizes, self.embedding_dim))
 
         self.dropout = nn.Dropout(self.keep_dropout)
         self.fc = nn.Linear(len(self.kernel_sizes) * self.out_channel, self.label_size)
@@ -76,10 +83,10 @@ class BasicCNN2D(nn.Module):
         x = x.unsqueeze(1)  # dim: (batch_size, 1, max_seq_len, embedding_size)
 
         # turns to be a list: [ti : i \in kernel_sizes] where ti: tensor of dim([batch, num_kernels, max_seq_len-i+1])
-        x = [F.relu(conv(x)).squeeze(3) for conv in self.conv]
+        x = F.relu(self.conv(x)).squeeze(3)
 
         # dim: [(batch_size, num_kernels), ...]*len(kernel_sizes)
-        x = [F.max_pool1d(i, i.size(2)).squeeze(2) for i in x]
+        x = F.max_pool1d(x, x.size(2)).squeeze(2)
         x = torch.cat(x, 1)
 
         # Dropout & output
@@ -96,28 +103,28 @@ def parse_opt():
                     help='hidden_dim')   
     
     
-    parser.add_argument('--batch_size', type=int, default=64,
+    parser.add_argument('--batch_size', type=int, default=32,
                     help='batch_size')
-    parser.add_argument('--embedding_dim', type=int, default=300,
-                    help='embedding_dim')
-    parser.add_argument('--learning_rate', type=float, default=4e-4,
-                    help='learning_rate')
+    # if opt.dataset=="imdb":
+    # parser.add_argument('--embedding_dim', type=int, default=100,
+    #                 help='embedding_dim')
+        # parser.add_argument('--max_seq_len', type=int, default=200,
+        #             help='max_seq_len')
+    # else:
+    # parser.add_argument('--embedding_dim', type=int, default=300,
+    #                 help='embedding_dim')
+    # parser.add_argument('--learning_rate', type=float, default=4e-4,
+    #                 help='learning_rate')
     parser.add_argument('--grad_clip', type=float, default=1e-1,
                     help='grad_clip')
-    parser.add_argument('--model', type=str, default="lstm",
-                    help='model name')
-    parser.add_argument('--model', type=str, default="lstm",
-                    help='model name')
+    # parser.add_argument('--model', type=str, default="lstm",
+    #                 help='model name')
+    # parser.add_argument('--model', type=str, default="lstm",
+                    # help='model name')
 
 
 #
     args = parser.parse_args()
-    args.embedding_dim=300
-    args.vocab_size=10000
-    args.kernel_size=3
-    args.num_classes=3
-    args.content_dim=256
-    args.max_seq_len=50
     
 #
 #    # Check if args are valid
@@ -133,4 +140,3 @@ if __name__ == '__main__':
     content = t.autograd.Variable(t.arange(0,3200).view(-1,50)).long()
     o = m(content)
     print(o.size())
-

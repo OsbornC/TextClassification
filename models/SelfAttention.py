@@ -17,15 +17,15 @@ class SelfAttention(nn.Module):
         self.hidden_dim = opt.hidden_dim
         self.batch_size = opt.batch_size
         self.use_gpu = torch.cuda.is_available()
-
-        self.word_embeddings = nn.Embedding(opt.vocab_size, opt.embedding_dim)
+        self.word_embeddings = nn.Embedding(opt.vocab_size+11, opt.embedding_dim)
         self.word_embeddings.weight = nn.Parameter(opt.embeddings,requires_grad=opt.embedding_training)
 #        self.word_embeddings.weight.data.copy_(torch.from_numpy(opt.embeddings))
   
         self.num_layers = 1
         #self.bidirectional = True
         self.dropout = opt.keep_dropout
-        self.bilstm = nn.LSTM(opt.embedding_dim, opt.hidden_dim // 2, num_layers=self.num_layers, dropout=self.dropout, bidirectional=True)
+        # self.bilstm = nn.LSTM(opt.embedding_dim, opt.hidden_dim // 2, num_layers=self.num_layers, dropout=self.dropout, bidirectional=True)
+        self.bilstm = nn.LSTM(opt.embedding_dim, opt.hidden_dim // 2, num_layers=self.num_layers, bidirectional=True)
         self.hidden2label = nn.Linear(opt.hidden_dim, opt.label_size)
         self.hidden = self.init_hidden()
         self.self_attention = nn.Sequential(
@@ -47,15 +47,19 @@ class SelfAttention(nn.Module):
 #    @profile
     def forward(self, sentence):
         embeds = self.word_embeddings(sentence)
-
 #        x = embeds.view(sentence.size()[1], self.batch_size, -1)
-        x=embeds.permute(1,0,2)
+        batch_size = len(sentence)
+        self.x=embeds.permute(1,0,2)
         self.hidden= self.init_hidden(sentence.size()[0]) #2x64x64
-        lstm_out, self.hidden = self.bilstm(x, self.hidden)  #lstm_out:200x64x128
+        # self.bilstm.flatten_parameters()
+        lstm_out, self.hidden = self.bilstm(self.x, self.hidden)  #lstm_out:200x32x128 batch_size * time_step * hidden_size
+        # print(lstm_out.size())
         final =lstm_out.permute(1,0,2)#torch.mean(,1) 
         attn_ene = self.self_attention(final)
-        attns =F.softmax(attn_ene.view(self.batch_size, -1))
-        feats = (final * attns).sum(dim=1)
-        y  = self.hidden2label(feats) #64x3
+        attns =F.softmax(attn_ene.view(batch_size, -1)) #200 time_step
+        # print(lstm_out.size(), final.size(), attns.size())
+        feats = (lstm_out.permute(2,1,0) * attns).sum(dim=2)
+        # print('feats', feats.size())
+        y  = self.hidden2label(feats.permute(1,0)) #64x3
         
         return y

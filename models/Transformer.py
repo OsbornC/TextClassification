@@ -28,7 +28,7 @@ class Linear(nn.Module):
     def __init__(self, d_in, d_out, bias=True):
         super(Linear, self).__init__()
         self.linear = nn.Linear(d_in, d_out, bias=bias)
-        init.xavier_normal(self.linear.weight)
+        init.xavier_normal_(self.linear.weight)
 
     def forward(self, x):
         return self.linear(x)
@@ -133,9 +133,9 @@ class MultiHeadAttention(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-        init.xavier_normal(self.w_qs)
-        init.xavier_normal(self.w_ks)
-        init.xavier_normal(self.w_vs)
+        init.xavier_normal_(self.w_qs)
+        init.xavier_normal_(self.w_ks)
+        init.xavier_normal_(self.w_vs)
 
     def forward(self, q, k, v, attn_mask=None):
 

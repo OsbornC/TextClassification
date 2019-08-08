@@ -37,7 +37,7 @@ class KIMCNN1D(nn.Module):
 #        for i in range(len(self.kernel_sizes)):
 #            conv = nn.Conv1d(self.in_channel, self.kernel_nums[i], self.embedding_dim * self.kernel_sizes[i], stride=self.embedding_dim)
 #            setattr(self, 'conv_%d'%i, conv)
-        self.convs = nn.ModuleList([nn.Conv1d(self.in_channel, num, self.embedding_dim * size, stride=self.embedding_dim) for size,num in zip(opt.kernel_sizes,opt.kernel_nums)])
+        self.convs = nn.Conv1d(self.in_channel, opt.kernel_nums, self.embedding_dim * opt.kernel_sizes, stride=self.embedding_dim)
         self.fc = nn.Linear(sum(self.kernel_nums), self.label_size)
 
     def get_conv(self, i):
@@ -53,10 +53,8 @@ class KIMCNN1D(nn.Module):
 #            F.max_pool1d(F.relu(self.get_conv(i)(x)), self.max_seq_len - self.kernel_sizes[i] + 1)
 #                .view(-1, self.kernel_nums[i])
 #            for i in range(len(self.kernel_sizes))]
-        conv_results = [
-            F.max_pool1d(F.relu(self.convs[i](x)), self.max_seq_len - self.kernel_sizes[i] + 1)
-                .view(-1, self.kernel_nums[i])
-            for i in range(len(self.convs))]
+        conv_results = F.max_pool1d(F.relu(self.convs(x)), self.max_seq_len - self.kernel_sizes + 1)
+                .view(-1, self.kernel_nums)
 
         x = torch.cat(conv_results, 1)
         x = F.dropout(x, p=self.keep_dropout, training=self.training)

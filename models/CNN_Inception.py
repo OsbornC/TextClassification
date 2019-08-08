@@ -15,31 +15,32 @@ class Inception(nn.Module):
         self.activa=nn.Sequential()
         if norm:self.activa.add_module('norm',nn.BatchNorm1d(co))
         if relu:self.activa.add_module('relu',nn.ReLU(True))
-        self.branch1 =nn.Sequential(OrderedDict([
-            ('conv1', nn.Conv1d(cin,cos[0], 1,stride=1)),
-            ])) 
+        # self.branch1 =nn.Sequential(OrderedDict([
+        #     ('conv1', nn.Conv1d(cin,cos[0], 1,stride=1)),
+        #     ])) 
         self.branch2 =nn.Sequential(OrderedDict([
             ('conv1', nn.Conv1d(cin,cos[1], 1)),
             ('norm1', nn.BatchNorm1d(cos[1])),
             ('relu1', nn.ReLU(inplace=True)),
             ('conv3', nn.Conv1d(cos[1],cos[1], 3,stride=1,padding=1)),
             ]))
-        self.branch3 =nn.Sequential(OrderedDict([
-            ('conv1', nn.Conv1d(cin,cos[2], 3,padding=1)),
-            ('norm1', nn.BatchNorm1d(cos[2])),
-            ('relu1', nn.ReLU(inplace=True)),
-            ('conv3', nn.Conv1d(cos[2],cos[2], 5,stride=1,padding=2)),
-            ]))
-        self.branch4 =nn.Sequential(OrderedDict([
-            #('pool',nn.MaxPool1d(2)),
-            ('conv3', nn.Conv1d(cin,cos[3], 3,stride=1,padding=1)),
-            ]))
+        # self.branch3 =nn.Sequential(OrderedDict([
+        #     ('conv1', nn.Conv1d(cin,cos[2], 3,padding=1)),
+        #     ('norm1', nn.BatchNorm1d(cos[2])),
+        #     ('relu1', nn.ReLU(inplace=True)),
+        #     ('conv3', nn.Conv1d(cos[2],cos[2], 5,stride=1,padding=2)),
+        #     ]))
+        # self.branch4 =nn.Sequential(OrderedDict([
+        #     #('pool',nn.MaxPool1d(2)),
+        #     ('conv3', nn.Conv1d(cin,cos[3], 3,stride=1,padding=1)),
+        #     ]))
     def forward(self,x):
-        branch1=self.branch1(x)
+        # branch1=self.branch1(x)
         branch2=self.branch2(x)
-        branch3=self.branch3(x)
-        branch4=self.branch4(x)
-        result=self.activa(torch.cat((branch1,branch2,branch3,branch4),1))
+        # branch3=self.branch3(x)
+        # branch4=self.branch4(x)
+        # result=self.activa(torch.cat((branch1,branch2,branch3,branch4),1))
+        result=self.activa(branch2)
         return result
 class CNNText_inception(nn.Module):
     def __init__(self, opt ):

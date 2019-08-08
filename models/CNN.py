@@ -126,55 +126,146 @@ class CNN2(nn.Module):
         self.embed = nn.Embedding(opt.vocab_size + 1, opt.embedding_dim)
 
         self.conv1 = nn.Sequential(
-            nn.Conv1d(opt.l0, 256, kernel_size=7, stride=1),
+            nn.Conv1d(opt.embedding_dim, 128, kernel_size=100, stride=1),
             nn.ReLU(),
-            nn.MaxPool1d(kernel_size=3, stride=3)
+            nn.MaxPool1d(kernel_size=100, stride=3)
         )
 
-        self.conv2 = nn.Sequential(
-            nn.Conv1d(256, 256, kernel_size=7, stride=1),
-            nn.ReLU(),
-            nn.MaxPool1d(kernel_size=3, stride=3)
-        )
+        # self.conv2 = nn.Sequential(
+        #     nn.Conv1d(128, 128, kernel_size=7, stride=1),
+        #     nn.ReLU(),
+        #     nn.MaxPool1d(kernel_size=3, stride=3)
+        # )
 
-        self.conv3 = nn.Sequential(
-            nn.Conv1d(256, 256, kernel_size=3, stride=1),
-            nn.ReLU()
-        )
+        # self.conv3 = nn.Sequential(
+        #     nn.Conv1d(256, 256, kernel_size=3, stride=1),
+        #     nn.ReLU()
+        # )
 
-        self.conv4 = nn.Sequential(
-            nn.Conv1d(256, 256, kernel_size=3, stride=1),
-            nn.ReLU()
-        )
+        # self.conv4 = nn.Sequential(
+        #     nn.Conv1d(256, 256, kernel_size=3, stride=1),
+        #     nn.ReLU()
+        # )
 
-        self.conv5 = nn.Sequential(
-            nn.Conv1d(256, 256, kernel_size=3, stride=1),
-            nn.ReLU()
-        )
+        # self.conv5 = nn.Sequential(
+        #     nn.Conv1d(256, 256, kernel_size=3, stride=1),
+        #     nn.ReLU()
+        # )
 
-        self.conv6 = nn.Sequential(
-            nn.Conv1d(256, 256, kernel_size=3, stride=1),
-            nn.ReLU(),
-            nn.MaxPool1d(kernel_size=3, stride=3)
-        )
+        # self.conv6 = nn.Sequential(
+        #     nn.Conv1d(256, 256, kernel_size=3, stride=1),
+        #     nn.ReLU(),
+        #     nn.MaxPool1d(kernel_size=3, stride=3)
+        # )
 
-        self.fc = nn.Linear(256, opt.label_size)
+        self.fc = nn.Linear(128, opt.label_size)
 
     def forward(self, x_input):
         # Embedding
         x = self.embed(x_input)  # dim: (batch_size, max_seq_len, embedding_size)
         x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.conv4(x)
-        x = self.conv5(x)
-        x = self.conv6(x)
+        # x = self.conv2(x)
+        # x = self.conv3(x)
+        # x = self.conv4(x)
+        # x = self.conv5(x)
+        # x = self.conv6(x)
 
         # collapse
         x = x.view(x.size(0), -1)
         x = self.fc(x)
 
         return F.log_softmax(x)
+
+
+class CNNClassifier(nn.Module):
+
+    def __init__(self, opt):
+        super(CNNClassifier, self).__init__()
+
+        self.word_embeddings = nn.Embedding(opt.vocab_size+1, opt.embedding_dim)
+
+        # The LSTM takes word embeddings as inputs, and outputs hidden states
+        # with dimensionality hidden_dim.
+        self.kernel_num = 128
+        self.conv1 = nn.ModuleList([
+            nn.Conv1d(opt.embedding_dim, self.kernel_num, kernel_size=100)
+            for kernel_size in (2,3,4)
+        ])
+        
+        self.maxpool = nn.MaxPool1d(55)
+        self.avgpool = nn.AvgPool1d(55)
+        self.dropout = nn.Dropout(p=0.5)
+
+        # The linear layer that maps from hidden state space to tag space
+        self.hidden2label = nn.Linear(27, opt.label_size)
+#         self.hidden2label = nn.Linear(200, 2)
+#         self.hidden2label = nn.Sequential(
+# #             nn.Linear(1800, 400),
+# #             nn.Linear(300, 120),
+#             nn.Linear(200, 84),
+#             nn.Linear(84, 2)
+#         )
+#         self.conv1 = nn.Sequential(
+#             nn.Conv1d(embedding_dim, kernel_num, kernel_size),
+            
+#         )
+#         self.conv2 = nn.Sequential(  # input shape (16, 14, 14)
+#             nn.Conv1d(6, 64, 1)  # output shape (32, 14, 14)
+# #             nn.ReLU()  # activation
+# #             nn.MaxPool1d(20),  # output shape (32, 7, 7)
+# #             nn.AvgPool1d(20)
+#         )
+        #self.batch_size = batch_size
+        #self.hidden = self.init_hidden(batch_size)
+        self.init_weights()
+        
+    def init_weights(self):
+        initrange = 0.1
+        self.word_embeddings.weight.data.uniform_(-initrange, initrange)
+
+    def forward(self, sentence):
+        #Batch_size, word_len, emb_size
+        embeds = self.dropout(self.word_embeddings(sentence))
+        size = embeds.size()
+        
+        ##Batch_size, 1, word_len, emb_size
+        inputs = embeds.view(size[0], size[2], size[1])
+#         inputs = embeds.view((size[0], 1, size[1], size[2]))
+        #Batch_size, out_channel, n-stride+1, 1
+        xs = []
+        for conv in self.conv1:
+#             x2 = F.relu(conv(x))        # [B, F, T, 1]
+#             x2 = torch.squeeze(x2, -1)  # [B, F, T]
+#             x2 = F.max_pool1d(x2, x2.size(2))  # [B, F, 1]
+            outputs = F.relu(conv(inputs))
+  
+            max_pool = self.maxpool(outputs).squeeze()
+            max_pool = max_pool.view(max_pool.size()[0], max_pool.size()[1], 1)
+            avg_pool = self.avgpool(outputs).squeeze()
+            avg_pool = avg_pool.view(avg_pool.size()[0], avg_pool.size()[1], 1)
+            min_pool = self.maxpool(-outputs).squeeze()
+            min_pool = min_pool.view(min_pool.size()[0], min_pool.size()[1], 1)
+            pool = self.dropout(torch.cat([max_pool, avg_pool, min_pool], dim=1))
+#             pool = self.dropout(self.conv2(self.dropout(torch.cat([max_pool, avg_pool, min_pool], dim=1))))
+            xs.append(pool)
+        x = torch.cat(xs, 2) 
+        
+#         outputs = nn.ReLU(outputs)
+#         outputs = outputs.view((size[0], 1, self.kernel_num, -1))
+        
+        #Concatenate max and average pooling
+#         pool = self.dropout(max_pool)
+#         pool = self.dropout(self.conv2(self.dropout(torch.cat([max_pool, avg_pool, min_pool], dim=1))))
+        
+        #fully connected layer
+#         pool = self.dropout(self.conv2(pool))
+        probs = self.hidden2label(x.view(-1, x.size(1) * x.size(2)))
+
+#         pred_scores = F.log_softmax(probs, dim=1)
+        
+        return F.log_softmax(probs)
+
+
 class CNN3(nn.Module):
     """
     A CNN for text classification.

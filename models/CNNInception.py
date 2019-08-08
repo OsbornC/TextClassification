@@ -1,6 +1,3 @@
-# -*- coding: utf-8 -*-
-
-
 import torch as t
 import torch
 import numpy as np
@@ -87,22 +84,3 @@ if __name__ == '__main__':
     content = t.autograd.Variable(t.arange(0,2500).view(10,250)).long()
     o = m(content)
     print(o.size())        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        

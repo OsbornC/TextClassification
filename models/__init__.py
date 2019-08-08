@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -12,7 +10,6 @@ import numpy as np
 
 from .LSTM import LSTMClassifier
 from .CNNBasic import BasicCNN1D,BasicCNN2D
-from .CNNKim import KIMCNN1D,KIMCNN2D
 from .CNNMultiLayer import MultiLayerCNN
 from .CNNInception import InceptionCNN
 from .FastText import FastText
